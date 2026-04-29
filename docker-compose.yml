@@ -1,0 +1,36 @@
+services:
+  aura-api:
+    build: .
+    image: aura:latest
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      AURA_JWT_SECRET: ${AURA_JWT_SECRET:-change-me-in-prod}
+      AURA_ADMIN_PASSWORD: ${AURA_ADMIN_PASSWORD:-admin}
+      AURA_USER_PASSWORD: ${AURA_USER_PASSWORD:-analyst}
+    volumes:
+      - ./data:/app/data:ro
+      - ./models:/app/models
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  aura-ui:
+    build: .
+    image: aura:latest
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      AURA_JWT_SECRET: ${AURA_JWT_SECRET:-change-me-in-prod}
+    volumes:
+      - ./data:/app/data:ro
+      - ./models:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      - aura-api
+    restart: unless-stopped
+
+networks:
+  default:
+    name: aura-net

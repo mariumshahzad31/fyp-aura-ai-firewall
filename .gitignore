@@ -1,0 +1,38 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs and data
+*.log
+logs/
+*.db
+*.sqlite
+
+# Models (optional - uncomment if too large)
+# *.h5
+# models/
+
+# Environment variables
+.env
+.env.local

@@ -1,0 +1,19 @@
+{
+  "include_rf_proba": false,
+  "include_iforest": true,
+  "include_anomaly_score": false,
+  "include_cvss_pred": false,
+  "include_behavioral_dev": false,
+  "w_rf": 0.2938037657872288,
+  "w_iforest": 0.0,
+  "w_anom": 0.5627220809454802,
+  "w_cvss": 0.49476215590781714,
+  "w_beh": 0.7350520025373584,
+  "score_threshold": 0.5682428223243368,
+  "anomaly_score_threshold": 0.55,
+  "behavioral_threshold": 0.6204597060348689,
+  "min_risk_index": 1,
+  "block_on_threat": false,
+  "block_requires_anomaly": false,
+  "block_requires_behavioral_spike": false
+}
