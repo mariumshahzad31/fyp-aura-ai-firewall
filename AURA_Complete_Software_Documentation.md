@@ -1,714 +1,1038 @@
-AURA Complete Software Documentation, Architecture, Reverse Engineering & Functional Analysis
-Document version: 1.0 (reverse-engineered from repository contents)  
-Repository: `mariumshahzad31/aura` (local workspace copy)  
-Primary language: Python  
-Primary interfaces: Streamlit dashboard, FastAPI REST API, CLI SOC simulator, AI Analyst chatbot  
-## 1. Complete Introduction
-### What AURA software is
-AURA (Advanced Unified Resilience Architecture) is an **AI-driven behavioral firewall stack** that combines:
-
-- **Dataset-backed ML training** from a single canonical CSV dataset (`data/Dataset-Attacks-Firewall.csv`).
-- **An ensemble detection engine** that produces risk classification, anomaly signals, and severity scores:
-  - Random Forest classifier for discrete **risk class**.
-  - Isolation Forest for **outlier/anomaly** detection.
-  - Gradient Boosting regressor for **CVSS-like severity prediction** on a 0–10 scale.
-  - Optional LSTM for **temporal/sequence-based** analysis using ordered windows.
-- **Operational response** capabilities:
-  - Structured alerting (JSONL ring buffer shared by UI/API/workers).
-  - OS firewall integration (Windows Defender Firewall via `netsh`, Linux via `iptables` or optional `nftables`), with safe dry-run defaults.
-  - Behavioral adaptive profiles (EWMA-based deviation scoring to surface “unexpected maliciousness” for previously benign entities).
-  - Threat intelligence enrichment via NVD CVE 2.0 API with disk cache.
-- **Multi-interface accessibility**:
-  - Streamlit web dashboard (`app.py`).
-  - FastAPI backend (`api/main.py`) with JWT authentication and role gating.
-  - CLI step-by-step SOC simulator (`cli_engine.py`).
-  - AI Analyst chatbot (`chatbot_engine.py`) with offline retrieval augmentation (RAG) and intent routing.
-
-In practice, AURA is designed as a **blue-team defensive analytics system** that can be deployed in a lab, training/demo environment, or production-like setup (Docker Compose provided). It centralizes detection, explanation, and response workflows in one coherent architecture.
-
-### Why it was created
-Traditional security controls (signature IDS, static rule-based firewalls, and manual monitoring) are excellent for known patterns but degrade when confronted with unknown threats, low-and-slow behavioral abuse, and human-scale monitoring constraints. AURA was built to demonstrate a coherent, production-style architecture where **ML classification**, **unsupervised anomaly detection**, **behavioral baselining**, and **policy enforcement** cooperate to produce explainable, auditable security outcomes.
-
-### Which domain it belongs to
-Cybersecurity defensive analytics:
-
-- Behavioral firewalling and response automation
-- Anomaly detection and outlier scoring
-- UEBA-style behavioral profiling
-- Threat scoring, severity ranking, and enrichment
-
-### Which real-world problem it solves
-Operationally, AURA addresses: **how to convert raw security-relevant records into prioritized, explainable decisions and (optionally) automated response actions**.
-
-### Why this software matters in modern systems
-Modern systems are dynamic (cloud, remote endpoints, rapid change). Static rules and signatures struggle with novel behaviors and drift. AURA demonstrates an approach where “unknown” can still be surfaced via anomaly signals and adaptive baselines, with outputs consumable by humans and automation.
-
-### Who uses it
-- SOC analysts (triage, investigation, reporting)
-- Security engineers (pipeline integration, response automation)
-- Researchers/learners (security ML and architecture demonstrations)
-
-### Why it is valuable
-It is end-to-end: **train → load artifacts → score → explain → alert → optionally enforce firewall**, delivered via **Streamlit UI + REST API + CLI + chatbot**.
-
----
-
-## 2. Full Identity of Software
-
-### Meaning of AURA name
-**AURA** stands for **Advanced Unified Resilience Architecture**.
-
-### Exact software category
-**AI-driven behavioral firewall and threat scoring platform** (feature-based scoring with enforcement hooks).
-
-### System identity (what it is in practice)
-- **Anomaly detection platform**: Isolation Forest (and generic anomaly fallback)
-- **Behavioral analytics engine**: per-entity EWMA deviation fusion
-- **Threat intelligence enrichment**: NVD CVE 2.0 API (cached)
-- **Firewall controller**: Windows `netsh`, Linux `iptables`/optional `nftables` (safe dry-run default)
-
-### Research prototype or deployable system?
-Deployable architecture (Docker Compose + FastAPI + Streamlit), with a demo-friendly live-telemetry bridge that maps live observations to dataset-backed proxy rows to preserve feature lineage.
-
----
-
-## 3. Problem Statement (Detailed)
-
-### Traditional security systems limitations
-- Rule-only firewalls lack behavioral context and adapt poorly to drift.
-- Signature systems fail against new exploits, obfuscation, and benign-looking abuse.
-- Manual monitoring does not scale to modern event volumes.
-
-### Signature-based systems limitations
-They only detect what is already known and encoded. Novel techniques and slight variants can bypass signatures while still being operationally harmful.
-
-### Human monitoring limitations
-Analysts cannot inspect every event; inconsistent triage and alert fatigue reduce effectiveness.
-
-### Unknown threats and insider abuse
-When payload-based indicators are missing, deviations from baseline and unusual combinations of attributes become critical early indicators.
-
-### Need for behavior intelligence and real-time anomaly detection
-Modern security requires fast scoring with explainable outputs and an operational pipeline that supports alerting and response.
-
----
-
-## 4. Objectives (Detailed)
-
-### Primary objectives
-- Train and persist deployable ML artifacts.
-- Score records into risk classes with probabilities.
-- Detect anomalies/outliers.
-- Produce explanations and operational outputs (alerts, optional firewall actions).
-
-### Secondary objectives
-- Provide multiple interfaces (UI/API/CLI/chat).
-- Provide threat intel enrichment and caching.
-- Operate safely when optional dependencies are absent.
-
-### Security objectives
-- JWT auth with admin/user roles.
-- Safe enforcement defaults (firewall dry-run).
-- Audit trails via JSONL logs and structured logging.
-
-### Technical objectives
-- Single source of truth for preprocessing and feature engineering.
-- Shared inference engine across all interfaces.
-- Thin interface layers using shared utilities and orchestration.
-
-### Business objectives
-- Demonstrate a production-style security ML system suitable for portfolio, interviews, and extension into SIEM/SOAR.
-
----
-
-## 5. Full Software Features (Every Feature)
-
-### 5.1 Multi-interface AI-driven platform
-- **Streamlit Dashboard** (`app.py`, `ui/`)
-- **FastAPI REST API** (`api/`)
-- **CLI SOC Simulator** (`cli_engine.py`)
-- **AI Analyst Chatbot** (`chatbot_engine.py`)
-
-### 5.2 Anomaly detection
-- Isolation Forest anomaly flagging on canonical dataset features.
-- Generic anomaly fallback path for non-canonical schemas (Isolation Forest + optional OneClassSVM + timing deviation).
-
-### 5.3 Threat scoring and classification
-- Random Forest classification into `Safe`, `Suspicious`, `Malicious`, `Critical`.
-- Class probabilities and confidence.
-
-### 5.4 Severity prediction (CVSS-like)
-- Gradient Boosting regression predicts `cvss_predicted` in the 0–10 range for ranking and policy thresholds.
-
-### 5.5 Temporal analysis (optional)
-- LSTM trained on sliding windows for sequence-based classification.
-
-### 5.6 Explainability layer
-- Deterministic explanations (`utils.prediction.explain_decision`).
-- Optional OpenAI-compatible structured explanations (`utils.llm_explainer.py`).
-
-### 5.7 Behavioral profiles (adaptive UEBA)
-- EWMA per-subject stats; deviation boosts when maliciousness appears unexpectedly.
-
-### 5.8 Threat intelligence enrichment
-- NVD CVE 2.0 fetch + disk cache; dataset vs intel CVSS delta.
-
-### 5.9 Firewall logic (response)
-- Windows and Linux enforcement backends with dry-run safety.
-- Admin endpoints and UI controls for manual actions.
-
-### 5.10 Alerts, logs, and reports
-- JSONL alert bus shared by UI/API.
-- Firewall action logs.
-- CSV/PDF exports for reporting (UI hooks + helper functions).
-
----
-
-## 6. Full End-to-End Working Process
-
-### 6.1 Inputs
-- **Dataset-backed records** from `data/Dataset-Attacks-Firewall.csv` (primary).
-- **API JSON records** posted to `/api/v1/predict`.
-- **CLI custom or sampled inputs**.
-- **Optional live packet observations** mapped to dataset-backed proxy rows.
-
-### 6.2 Processing steps (canonical path)
-1. Load raw records (UI/API/CLI).
-2. Feature engineering and schema enforcement (`utils.preprocessing.build_feature_frame`).
-3. Preprocessor transform (scaler + one-hot).
-4. Random Forest risk classification + probabilities.
-5. Isolation Forest outlier flag + score.
-6. Gradient Boosting severity prediction (0–10).
-7. Optional LSTM sequence label (UI simulation).
-8. Explanation generation (deterministic; optional LLM enhancement).
-9. Behavioral deviation fusion (API/orchestration).
-10. Persist alert to JSONL.
-11. Optional firewall block (requires live meta + config).
-
-### 6.3 Internal flow between files/modules (high-level)
-- UI (`app.py`, `ui/pages.py`) and API (`api/main.py`) both call `utils.prediction.AuraPredictor`.
-- Shared response loop exists in `utils/orchestration.score_and_respond`.
-- Alerts are persisted and shared via `utils/alert_bus`.
-- Enforcement is implemented in `utils/firewall` and is invoked by API/UI/orchestration depending on configuration.
-
----
-
-## 7. Deep Anomaly Detection Engine (Very Important)
-
-### What anomaly detection means in AURA
-It is the detection of **out-of-distribution** events relative to the learned feature manifold, independent of the supervised class label.
-
-### Why used here
-It provides a route to surface unknown or novel patterns that a classifier may not have seen in training.
-
-### How implemented (canonical schema)
-- Trained Isolation Forest in `train_model.py`, persisted in `models/risk_model.pkl`.
-- Inference in `utils.prediction.AuraPredictor.predict_tabular` using:
-  - `predict()` → `anomaly_score_flag` (`-1` outlier, `1` inlier)
-  - `score_samples()` → `anomaly_score` (best-effort)
-
-### Behavioral baselines and adaptive anomaly interpretation
-`utils.behavioral_profiles` adds a second “anomaly” axis: a deviation score when a historically benign entity produces a malicious event. This supports insider-style or first-time-abuse scenarios.
-
-### Generic anomaly scoring (non-canonical schema)
-When inputs don’t match the canonical schema, AURA constructs a generic feature matrix and computes an ensemble anomaly score, then maps that score to risk levels and a CVSS-like severity estimate.
-
----
-
-## 8. ML Models Used (Based on Repo)
-
-### Random Forest (classification)
-Primary risk classifier; outputs class probabilities for confidence and explainability.
-
-### Isolation Forest (anomaly detection)
-Outlier detector; flags novel patterns.
-
-### Gradient Boosting (regression)
-Predicts severity (`cvss_predicted`) on 0–10.
-
-### LSTM (sequence model, optional)
-Temporal classifier trained on sliding windows of ordered events.
-
-### OneClassSVM (fallback only)
-Secondary anomaly signal in the generic scoring path when batch size permits.
-
----
-
-## 9. Why Anomaly Check Feature Is Powerful
-It is a direct operational mechanism to validate suspicious inputs, outperforming purely static signature/rule systems by combining supervised risk classification with unsupervised novelty detection and (optionally) temporal modeling.
-
----
-
-## 10. Full Tech Stack
-- **Python**: pandas, numpy
-- **ML**: scikit-learn, TensorFlow (optional)
-- **UI**: Streamlit, Plotly
-- **API**: FastAPI, Uvicorn, pydantic, python-jose, passlib
-- **Packet capture**: Scapy (optional)
-- **Deployment**: Docker, Docker Compose
-- **Storage**: CSV dataset, JSON/JSONL logs, joblib + Keras artifacts
-
----
-
-## 11. Full Folder Structure Analysis
-
-### `api/`
-FastAPI application, JWT auth, API schemas.
-
-### `config/`
-Environment-backed configuration and defaults.
-
-### `docs/`
-Architecture documentation.
-
-### `mobile/`
-Mobile/client integration guide for the API.
-
-### `ui/`
-Streamlit layout, pages, styles.
-
-### `utils/`
-Core engine: preprocessing, prediction, orchestration, firewall, alert bus, behavioral profiles, live monitor bridge, intel, analytics, explainers.
-
-### Runtime directories (expected)
-Even if not committed in this snapshot, AURA expects:
-
-- `data/` for `Dataset-Attacks-Firewall.csv`
-- `models/` for persisted artifacts
-- `logs/` for JSONL logs, profile store, and intel cache
-
----
-
-## 12. FULL FILE-BY-FILE ANALYSIS (CRITICAL)
-
-| File Name | Purpose | What Code Likely Does | Why Needed | Connected Modules |
-|---|---|---|---|---|
-| `README.md` | Project overview | Run instructions and system description | Operator entrypoint | All |
-| `requirements.txt` | Dependencies | Declares runtime deps | Reproducible environment | All |
-| `Dockerfile` | Container build | Builds Python image and installs deps | Deployability | API/UI |
-| `docker-compose.yml` | Orchestration | Runs API and UI services | One-command deploy | Docker |
-| `.gitignore` | VCS hygiene | Ignores env/log/model artifacts | Prevent secrets/artifacts | Repo |
-| `app.py` | Streamlit entry | Loads dataset/models and routes pages | Main UI | `ui/*`, `utils/*` |
-| `train_model.py` | Training | Trains RF/IF/GBDT + optional LSTM | Produces artifacts | `utils.preprocessing` |
-| `cli_engine.py` | CLI | Step-by-step SOC simulation | Debug/education | `utils.prediction` |
-| `chatbot_engine.py` | Chatbot | Intent + RAG + ML-backed answers | SOC copilot | `utils/*` |
-| `docs/ARCHITECTURE.md` | Arch docs | Flow diagram and module roles | Design guide | All |
-| `mobile/README.md` | Client docs | API endpoint usage | Integration | `api/main.py` |
-| `api/__init__.py` | Package | Marks API package | Imports | API |
-| `api/main.py` | API app | Auth, predict, status, alerts, logs, intel, firewall | Integration surface | `utils/*` |
-| `api/auth.py` | JWT auth | Token issuance and role checks | Security | `api/main.py` |
-| `api/schemas.py` | API models | Predict/status/token DTOs | Contract | `api/main.py` |
-| `config/__init__.py` | Package | Exports settings | Imports | `api/*`, `utils/*` |
-| `config/settings.py` | Settings | Env config for secrets/features | Central config | All |
-| `ui/__init__.py` | Package | Marks UI package | Imports | `app.py` |
-| `ui/layout.py` | UI shell | Sidebar/header/pipeline strip/state init | UX | `ui/pages.py` |
-| `ui/pages.py` | UI pages | Dashboard, anomaly check, monitoring, firewall controls, logs, chat UI | Core UI | `utils/*` |
-| `ui/styles.py` | CSS | Light/dark theme and chrome hiding | UX | UI |
-| `utils/__init__.py` | Package | Marks utils package | Imports | All |
-| `utils/helpers.py` | Helpers | Paths, JSON logging, exports | Plumbing | All |
-| `utils/preprocessing.py` | Features | Schema enforcement + engineered features + LSTM split | ML correctness | Train/predict |
-| `utils/prediction.py` | Predictor | Load artifacts + inference + explanations + fallback | Core engine | UI/API/CLI/chat |
-| `utils/orchestration.py` | Orchestrator | Score + behavior + alert + firewall | Reuse | UI/CLI |
-| `utils/alert_bus.py` | Alerts | JSONL append/tail | Shared comms | UI/API |
-| `utils/firewall.py` | Firewall | netsh/iptables/nft + logging + dry-run | Response | UI/API |
-| `utils/behavioral_profiles.py` | UEBA | EWMA baseline + deviation fusion | Context | UI/API |
-| `utils/packet_monitor.py` | Capture | Scapy sniff + record buffer | Optional live | UI/API status |
-| `utils/live_bridge.py` | Mapping | Live context → dataset proxy row | Feature lineage | Packet monitor |
-| `utils/threat_intel.py` | Intel | NVD fetch + cache + merge | Enrichment | UI/API/chat |
-| `utils/dataset_metrics.py` | Analytics | Summary/timeline/watchlists/log rows | Dashboard | UI |
-| `utils/model_ui.py` | Model metrics | Feature importance + metrics blobs | Observability | UI |
-| `utils/llm_explainer.py` | LLM layer | Optional structured explanations with fallback | Explainability | Predictor |
-
----
-
-## 13. Code Architecture Analysis
-### 13.1 Architectural pattern
-AURA is built as a **shared-core / multi-adapter** system:
-
-- **Shared core** (`utils/`): all detection, preprocessing, inference, response primitives.
-- **Adapters**:
-  - Streamlit UI (`app.py`, `ui/`) for interactive SOC workflows.
-  - FastAPI (`api/`) for programmatic integration.
-  - CLI (`cli_engine.py`) for step-by-step pipeline execution.
-  - Chatbot (`chatbot_engine.py`) for natural-language interactions.
-- **Configuration** (`config/`): environment-driven settings for security-sensitive and deployment-specific behavior.
-
-This is a deliberate design choice: **one engine, multiple entrypoints**, which reduces divergence and “it works in the UI but not in the API” class of failures.
-
-### 13.2 Module responsibilities (reverse-engineered boundaries)
-- **`utils/preprocessing.py`**: schema contract + feature engineering + preprocessor construction + chronological split + sequence building.
-- **`utils/prediction.py`**: artifact loading + transformation + inference + explanation + fallback inference for non-canonical schemas.
-- **`utils/orchestration.py`**: “score → behavioral update → alert → optional firewall” loop for reuse by interfaces.
-- **`utils/behavioral_profiles.py`**: per-subject baseline + deviation scoring + fused risk view.
-- **`utils/alert_bus.py`**: minimal event bus via JSONL append/tail (cross-process).
-- **`utils/firewall.py`**: enforcement abstraction with platform-specific backends + action logging.
-- **`utils/threat_intel.py`**: optional enrichment and caching.
-- **`utils/packet_monitor.py` + `utils/live_bridge.py`**: optional live capture + dataset-aligned record generation.
-- **`utils/dataset_metrics.py` + `utils/model_ui.py`**: observability and analytics for UI.
-- **`utils/llm_explainer.py`**: optional explanation enhancement with deterministic fallback.
-
-### 13.3 Key runtime object graph
-Across interfaces, the dominant runtime objects are:
-
-- **`AuraPredictor`**: loads model bundles once and scores records.
-- **`FirewallManager`**: singleton used by UI/API/orchestration for block/unblock and state reporting.
-- **`BehavioralProfileStore`**: singleton used to record events and compute deviation.
-- **Packet monitor service** (optional): singleton that manages background sniff thread and ring buffers.
-
-### 13.4 Data lineage principle (critical design decision)
-AURA enforces a strong lineage rule: **feature vectors must be derived from rows compatible with the canonical dataset schema**.
-
-- When live packets are captured, AURA does not invent missing engineered columns.
-- Instead, it selects a **deterministic dataset proxy row** and attaches live-only metadata in `_live_meta`.
-
-This preserves reproducibility and model correctness at the expense of real-telemetry richness. The design is suitable for demonstration and controlled environments and provides a stable base for evolving toward real feature ingestion later.
-
----
-
-## 14. Security Architecture
-### 14.1 Identity and access control (API layer)
-The FastAPI service uses:
-
-- OAuth2 password flow at `POST /api/v1/auth/token`
-- JWT issuance and validation (`python-jose`)
-- Role claims: `role = admin | user`
-
-Role enforcement:
-
-- `get_current_user` validates JWT and returns `{"username", "role"}`
-- `require_admin` blocks access to admin-only endpoints (logs tail, firewall actions)
-
-Credentials are loaded from environment variables (`AURA_ADMIN_*`, `AURA_USER_*`). Password hashes are computed at runtime via `passlib`.
-
-### 14.2 Security controls for enforcement (firewall)
-Firewall actions are designed to be safe by default:
-
-- **Dry-run enabled by default** (`AURA_FIREWALL_DRY_RUN=true`).
-- Auto-blocking is disabled by default (`AURA_FIREWALL_AUTO_BLOCK=false`).
-- Windows and Linux backends are separated behind an interface; commands are logged.
-
-### 14.3 Auditability and forensic logging
-AURA’s audit trail is built from:
-
-- Structured JSON logs (UI/API/training logs).
-- Append-only JSONL:
-  - `logs/aura_alerts.jsonl` (alerts)
-  - `logs/firewall_actions.jsonl` (enforcement actions)
-- Behavioral profile persistence (`logs/behavioral_profiles.json`)
-- Intel cache persistence (`logs/intel_cache/*.json`)
-
-These files are intentionally human-readable and ingestible by log shipping tools.
-
-### 14.4 LLM and threat-intel security posture
-Optional external calls:
-
-- **LLM explanations**: OpenAI-compatible API; controlled by `AURA_LLM_ENABLED` and API key env vars; deterministic fallback prevents failure.
-- **NVD intel**: httpx calls to NVD CVE 2.0; optional API key; 24h cache reduces exposure and rate-limit issues.
-
-### 14.5 Known security gaps (as implemented)
-- Default credential values exist; production must override them.
-- There is no built-in rate limiting, brute-force protection, or account lockout for the auth endpoint.
-- JSONL storage has no tamper-proofing; enterprise deployments would add integrity controls and external log retention.
-
----
-
-## 15. Dataset Analysis
-### 15.1 Canonical dataset contract (strict)
-The preprocessing layer requires a specific schema (a “contract”). Missing required columns raise a hard error, preventing silent model misuse. Required columns include:
-
-- CVE/event identifier: `Data`
-- Dates: `pub_date`, `mod_date` (parsed day-first; converted to epoch seconds)
-- Severity: `cvss` (numeric; required)
-- Source-like field: `Firewall Traffics` (parsed into octet features)
-- CWE metadata: `cwe_code`, `cwe_name`
-- Text: `summary`
-- Access/impact categorical vectors:
-  - `access_authentication`, `access_complexity`, `access_vector`
-  - `impact_availability`, `impact_confidentiality`, `impact_integrity`
-
-### 15.2 Derived engineered features (explicit)
-From the canonical columns AURA derives:
-
-- `summary_len`: length of summary (clipped)
-- `fw_o1..fw_o4`: numeric components parsed from `Firewall Traffics`
-- `pub_ts`, `mod_ts`: epoch seconds from dates
-- `risk_class` (training label): derived from CVSS banding:
-  - Safe < 4.0
-  - Suspicious 4.0–<6.0
-  - Malicious 6.0–<9.0
-  - Critical ≥ 9.0
-
-### 15.3 Dataset-driven analytics (UI-facing)
-`utils/dataset_metrics.py` derives:
-
-- dataset summary (row counts, unique CVEs/sources, CVSS stats, risk distribution)
-- time-series event volumes (daily/hourly/weekly)
-- watchlists (sources with concentration of high CVSS)
-- CWE distribution and risk timelines
-- log-like rows for UI when no simulated history exists
-
-### 15.4 What the dataset represents (interpretation)
-Although named “firewall,” the dataset is closer to a **CVE/vulnerability + derived “firewall source” field** dataset than raw packet telemetry. AURA uses it as a stable substrate for:
-
-- supervised risk band classification
-- severity regression
-- unsupervised outlier detection
-- temporal sequencing (ordered by publication time)
-
----
-
-## 16. Model Training Pipeline
-### 16.1 Artifact outputs
-The training pipeline produces:
-
-- `models/risk_model.pkl`
-  - RandomForest classifier
-  - IsolationForest
-  - fitted preprocessor (ColumnTransformer)
-  - `lstm_seq_len`
-  - metrics blob
-- `models/cvss_model.pkl`
-  - GradientBoosting regressor
-  - fitted preprocessor
-  - RMSE metric
-- `models/lstm_model.h5` (optional; only if TensorFlow available)
-- `logs/last_training_metrics.json`
-
-### 16.2 Step-by-step training flow (actual code path)
-1. Ensure directories exist (`utils.helpers.ensure_directories`).
-2. Load raw dataset (`load_raw_dataset`) and build feature frame (`build_feature_frame`).
-3. Chronologically split by `pub_ts` into train/test.
-4. Extract labels:
-   - `y_risk` from `risk_class` (derived from CVSS)
-   - `y_cvss` from `cvss`
-5. Fit and apply preprocessor on train only; transform test.
-6. Train models:
-   - IsolationForest (contamination 0.06)
-   - RandomForestClassifier (balanced_subsample)
-   - GradientBoostingRegressor (depth 5, 200 estimators)
-7. Prepare LSTM tensors:
-   - build sliding windows of length 12 across ordered data
-   - split sequences by the same chronological cut index
-   - subsample sequences to caps for efficiency
-8. Train LSTM (if TensorFlow present), save model, store metrics.
-9. Persist artifacts to `models/` and metrics file to `logs/`.
-
-### 16.3 Why this pipeline design matters
-- Chronological split reduces “future leakage.”
-- Persisting the preprocessor with artifacts prevents transformation drift.
-- Storing metrics and exposing them in UI supports governance and observability.
-
----
-
-## 17. Chatbot Module Analysis
-### 17.1 Operational purpose
-The chatbot provides a conversational interface for:
-
-- CVE explanations and severity context
-- IP threat assessment (based on dataset matches or fallback reasoning)
-- alerts/incident summaries (based on sample scoring)
-- behavioral profiling status
-- firewall decision explanation
-- project usage and architecture guidance (offline RAG)
-
-### 17.2 Retrieval-Augmented Generation (offline)
-The offline RAG index is intentionally lightweight:
-
-- Sources: README, requirements, Docker files, entrypoints, `docs/*.md`
-- Vectorization: TF-IDF with uni/bi-grams, stop words removed
-- Output: multi-source snippet bullets, explicitly showing the source file path
-
-This allows the chatbot to answer “how do I run this?” without needing external LLM calls.
-
-### 17.3 ML-backed answers (when artifacts + dataset exist)
-When available, the chatbot:
-
-- Locates dataset columns dynamically (schema detector) to find CVE/IP/CVSS fields.
-- Subsets matching rows and calls `AuraPredictor.predict_records`.
-- Summarizes risk class distribution, average predicted CVSS, anomaly counts.
-- Optionally enriches CVE context via `correlate_dataset_cve`.
-
-### 17.4 Fallback behavior and safety
-If models or dataset are unavailable:
-
-- It returns deterministic fallback responses and conservative “AI reasoning” templates.
-- It does not claim ground truth about a CVE not present in data; it frames it as an estimate.
-
----
-
-## 18. Dashboard Module Analysis
-### 18.1 Dashboard as a SOC control center
-The Streamlit UI is designed to look and behave like an operational console:
-
-- A persistent navigation sidebar across functional pages.
-- A system “mode” selector (Protection / Learning / Monitoring) that influences which architecture stage is highlighted (presentation + operator context).
-- A threat-level filter and sensitivity slider controlling what is surfaced.
-- Quick actions (scan ingestion, refresh dataset).
-
-### 18.2 Threat history model
-The UI maintains an in-session “threat history” with fields such as:
-
-- timestamp, cve_id, risk_class, cvss_predicted, anomaly/inlier label
-- risk probabilities, deterministic/LLM explanation output
-- behavioral fusion output
-- (in simulation) LSTM label and confidence
-
-This history powers:
-
-- the live logs view
-- charts/histograms
-- exports
-
-### 18.3 Simulation workflow (important)
-The simulation is not random noise; it is dataset-aligned and sequence-aware:
-
-- Features are built and ordered by publication timestamp.
-- Random end indices are selected ensuring a full LSTM window exists.
-- The predictor scores the corresponding raw dataset rows.
-- For each scored event, the UI optionally runs LSTM classification on the associated window.
-
-This creates a realistic “stream” for UI demonstrations without requiring live traffic.
-
-### 18.4 Pages implemented (functional inventory)
-`ui/pages.py` implements renderers for:
-
-- Dashboard
-- Anomaly Check (sample/custom/bulk upload)
-- Live Monitoring (packet capture if available + dataset timeseries)
-- AI Insights (risk mix, confidence, feature importance)
-- AI Analyst Chat (embedded chatbot UI)
-- Threat Intelligence (NVD enrichment)
-- System Architecture (metrics blob display)
-- Analytics (watchlists and timelines)
-- Firewall Controls (policy toggles + manual block/unblock)
-- Logs (filter/search/export)
-- Mobile View (condensed status)
-
-### 18.5 UI security posture
-The UI does not implement its own auth; it is assumed to run in a trusted operator context (local or behind an access-controlled environment). The API is the primary security boundary.
-
----
-
-## 19. CLI Module Analysis
-### 19.1 CLI as an explainable pipeline runner
-The CLI provides a structured walkthrough of the system with explicit “Step 1…Step N” execution. It exposes:
-
-- intermediate data shapes and null counts
-- IsolationForest score distributions (mean/std)
-- RandomForest probability breakdown per class
-- CVSS regression distribution
-- optional LSTM output shape and score
-
-### 19.2 Why this matters
-Security ML systems fail in production most often due to:
-
-- schema mismatch
-- preprocessing drift
-- artifact load errors
-- misunderstood model outputs
-
-The CLI makes these failure modes visible and provides a deterministic way to validate each stage independently.
-
----
-
-## 20. API Module Analysis
-### 20.1 API design principles
-The API is designed to be:
-
-- **Mobile-ready**: JSON responses, CORS configurable.
-- **Thin**: wraps shared engine objects rather than re-implementing logic.
-- **Secure**: JWT auth with admin-only endpoints.
-
-### 20.2 Endpoint catalog (implemented behavior)
-- `POST /api/v1/auth/token`
-  - Validates credentials, issues JWT with role.
-- `GET /api/v1/status`
-  - Reports:
-    - model readiness
-    - firewall state (dry run, blocked session IPs, recent actions)
-    - packet monitor state (running, captured count, last error)
-    - behavioral profile snapshot
-- `POST /api/v1/predict`
-  - Batch scoring with optional explanations and optional LLM enhancement.
-  - For each result:
-    - behavioral deviation computed and stored
-    - alert appended to JSONL
-    - optional firewall auto-block on malicious/critical when live meta exists
-- `GET /api/v1/alerts`
-  - Tail N recent alerts from shared JSONL ring.
-- `GET /api/v1/logs/tail` (admin)
-  - Returns last N lines from a log file in `logs/`.
-- `GET /api/v1/intel/cve/{cve_id}`
-  - Attempts to find CVE in local dataset using dynamic column detection; if found, correlates with NVD and returns merged output.
-- `POST /api/v1/firewall/block` (admin)
-  - Applies block rule (dry-run aware).
-- `POST /api/v1/firewall/unblock` (admin)
-  - Removes rule (dry-run aware).
-
-### 20.3 Data validation considerations
-`PredictRequest.records` is schema-free by design (list of dicts). This allows flexibility but shifts responsibility to preprocessing:
-
-- Canonical path strictly enforces required dataset columns.
-- Non-canonical path uses generic feature inference and anomaly scoring.
-
-Enterprise hardening would add explicit schemas per telemetry type and stricter input validation, but AURA intentionally demonstrates both strict and flexible modes.
-
----
-
-## 21. Pros of Software
-End-to-end system, modular reuse, safe enforcement defaults, deterministic fallbacks, and multiple operational interfaces.
-
----
-
-## 22. Cons / Limitations
-Live telemetry is dataset-proxy based; storage is file-based; production hardening and scaling would require stronger secrets management and persistent stores/queues.
-
----
-
-## 23. Improvement Suggestions
-SIEM/SOAR integrations, streaming ingestion, stronger RBAC, Kubernetes deployment, explainable AI (SHAP), drift detection and retraining automation, richer telemetry features.
-
----
-
-## 24. Real World Use Cases
-Banking, healthcare, cloud, e-commerce, government, campus networks, and SMEs, especially where explainable scoring and safe response automation are required.
-
----
-
-## 25. Resume / Interview Value
-Demonstrates full-stack security ML engineering: training, inference, APIs, UI, access control, deployment, and operational response.
-
----
-
-## 26. 20 Interview Questions with Answers
-
-1. **What is AURA?** An AI-driven behavioral firewall and threat scoring platform with UI/API/CLI/chat interfaces.
-2. **Why Random Forest + Isolation Forest?** Classification + novelty/outlier detection for unknowns.
-3. **Why chronological split?** Reduces leakage; approximates real deployment.
-4. **What is `cvss_predicted`?** Continuous severity ranking output (0–10).
-5. **What is the anomaly flag meaning?** `-1` outlier, `1` inlier (Isolation Forest).
-6. **How does AURA enforce firewall decisions safely?** Dry-run default; explicit enable for auto-blocking.
-7. **How are alerts stored?** Append-only JSONL ring shared across processes.
-8. **What is UEBA in AURA?** EWMA behavioral profiles and deviation boosts.
-9. **How does the chatbot work offline?** TF-IDF retrieval over repo docs + deterministic reasoning.
-10. **What are the main API endpoints?** Auth token, predict, status, alerts, logs tail, intel, firewall block/unblock.
-11. **How is API secured?** JWT with role checks; admin-only endpoints.
-12. **How is training reproducible?** Fixed preprocessing pipeline and persisted preprocessor in artifacts.
-13. **What happens if TensorFlow is missing?** LSTM training/loading is skipped; system continues.
-14. **What happens if Scapy is missing?** Packet capture disabled; system continues.
-15. **What is the generic scoring path?** Anomaly ensemble for non-canonical schemas.
-16. **What is the single source of truth for features?** `utils/preprocessing.build_feature_frame`.
-17. **How do you export reports?** CSV/PDF helper functions; UI provides controls.
-18. **How do you integrate threat intel?** NVD CVE 2.0 API with cache.
-19. **What are the biggest limitations?** Dataset-proxy live mapping; file-based persistence.
-20. **How would you scale it?** Queue/DB, worker processes, Kafka, Kubernetes, model registry.
-
----
-
-## 27. Final 60-Second Project Explanation
-AURA trains an ensemble security ML model on a canonical dataset and exposes a unified scoring engine across a Streamlit SOC dashboard, FastAPI REST API with JWT roles, a CLI simulator, and a natural-language AI Analyst chatbot. For each event it outputs a risk class, anomaly signal, severity score, and explanation, persists alerts for audit, and can optionally trigger OS firewall blocks with safe defaults.
-
----
-
-## 28. Final Verdict
-AURA is a strong end-to-end security ML platform demonstrating production-style architecture and operational workflows. Its core strength is the shared engine design (`utils/`) reused consistently across UI/API/CLI/chat, with safe enforcement defaults and auditable outputs.
+AURA: Advanced Unified Resilience Architecture
+Evolutionary AI Behavioral Firewall System
+
+Version: 2.0
+Date: April 30, 2026
+Authors: AURA Development Team
+License: MIT
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. Project Overview
+2. Problem Statement
+3. Proposed Solution
+4. System Architecture
+5. Module-wise Explanation
+6. Data Flow Diagram
+7. Technologies Used
+8. Installation & Setup Guide
+9. How to Run the Project
+10. Input/Output Format
+11. Error Handling Mechanisms
+12. Optimization Techniques Applied
+13. Advantages
+14. Limitations
+15. Future Enhancements
+16. Conclusion
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+WHAT IS AURA?
+
+AURA (Advanced Unified Resilience Architecture) is a production-grade, AI-driven behavioral firewall system that combines multiple machine learning models with evolutionary computing optimization to provide comprehensive threat detection and response capabilities. The system integrates:
+
+- Ensemble ML Models: Random Forest, Isolation Forest, Gradient Boosting, and LSTM for multi-layered threat analysis
+- Evolutionary Computing Layer: Genetic Algorithm (GA) and Particle Swarm Optimization (PSO) for adaptive policy tuning
+- Behavioral Analysis Engine: Real-time anomaly detection with adaptive profiling
+- Firewall Decision System: Automated response capabilities with OS-level integration
+- Multi-Interface Accessibility: Web dashboard, REST API, CLI, and AI chatbot
+
+WHY AURA MATTERS
+
+Traditional security systems struggle with:
+- Zero-day threats and novel attack patterns
+- Behavioral anomalies that signature-based systems miss
+- Manual analysis bottlenecks in high-volume environments
+- Static rules that fail against adaptive adversaries
+
+AURA addresses these challenges by combining supervised learning, unsupervised anomaly detection, and evolutionary optimization to create an adaptive, explainable security system.
+
+KEY FEATURES
+
+- Multi-Modal Threat Detection: Classification + anomaly detection + temporal analysis
+- Evolutionary Policy Optimization: GA + PSO for adaptive decision thresholds
+- Real-Time Behavioral Profiling: EWMA-based deviation scoring
+- Automated Response: OS firewall integration with dry-run safety
+- Explainable AI: Human-readable threat explanations
+- Multi-Interface: Streamlit UI, FastAPI API, CLI, AI Chatbot
+- Production-Ready: Docker deployment, JWT authentication, audit trails
+
+================================================================================
+2. PROBLEM STATEMENT
+================================================================================
+
+TRADITIONAL SECURITY SYSTEM LIMITATIONS
+
+1. Signature-Based Detection Failure
+   - Only detects known threats
+   - Fails against obfuscated or novel attacks
+   - Requires constant signature updates
+
+2. Rule-Based System Inflexibility
+   - Static rules cannot adapt to new patterns
+   - High false positive rates
+   - Manual rule maintenance overhead
+
+3. Human Analysis Bottlenecks
+   - SOC analysts cannot inspect every event
+   - Alert fatigue reduces response effectiveness
+   - Inconsistent triage decisions
+
+4. Unknown Threat Blind Spots
+   - Zero-day exploits go undetected
+   - Insider threats and behavioral abuse
+   - Low-and-slow attacks evade detection
+
+THE NEED FOR AI-DRIVEN BEHAVIORAL ANALYSIS
+
+Modern cyber threats require:
+- Behavioral Intelligence: Detection of unusual patterns vs. known bad
+- Adaptive Learning: Systems that improve over time
+- Automated Response: Fast, consistent reactions to threats
+- Explainable Decisions: Human-understandable reasoning
+
+AURA'S SOLUTION APPROACH
+
+AURA implements a defense-in-depth strategy combining:
+- Supervised Classification: Risk level prediction using Random Forest
+- Unsupervised Anomaly Detection: Novel pattern identification via Isolation Forest
+- Temporal Analysis: Sequence-based threat detection with LSTM
+- Evolutionary Optimization: Adaptive policy tuning with GA + PSO
+- Behavioral Profiling: Entity-based deviation scoring
+
+================================================================================
+3. PROPOSED SOLUTION
+================================================================================
+
+CORE ARCHITECTURE
+
+AURA implements a layered detection and response system:
+
+Input Data → Preprocessing → ML Ensemble → Evolutionary Policy → Decision → Response
+
+DETECTION LAYERS
+
+1. Feature Engineering Layer
+   - Extracts behavioral features from raw security events
+   - Handles multiple data schemas (firewall logs, CVE data, custom formats)
+
+2. ML Ensemble Layer
+   - Random Forest: Risk classification (Safe/Suspicious/Malicious/Critical)
+   - Isolation Forest: Anomaly detection (-1 outlier, +1 normal)
+   - Gradient Boosting: CVSS severity prediction (0-10 scale)
+   - LSTM: Temporal sequence analysis (optional)
+
+3. Evolutionary Optimization Layer
+   - Genetic Algorithm: Feature selection and discrete rule optimization
+   - Particle Swarm Optimization: Continuous threshold and weight tuning
+   - Fitness Function: Multi-objective optimization (accuracy, FPR, FNR, latency, stability)
+
+4. Behavioral Analysis Layer
+   - Per-entity EWMA profiling
+   - Deviation scoring for unusual behavior
+   - Adaptive baseline updates
+
+5. Decision & Response Layer
+   - Policy-based action recommendations
+   - OS firewall integration (Windows/Linux)
+   - Alert generation and logging
+
+KEY INNOVATIONS
+
+- Evolutionary Policy Layer: Uses GA + PSO to optimize decision policies without retraining base models
+- Generic Anomaly Fallback: Handles non-canonical data schemas
+- Behavioral Fusion: Combines ML outputs with entity behavior profiles
+- Explainable Outputs: Human-readable threat narratives and recommendations
+
+================================================================================
+4. SYSTEM ARCHITECTURE
+================================================================================
+
+HIGH-LEVEL ARCHITECTURE
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    AURA SYSTEM ARCHITECTURE                      │
+├─────────────────────────────────────────────────────────────────┤
+│  INPUT LAYER: Raw security events (CSV, API, live packets)      │
+├─────────────────────────────────────────────────────────────────┤
+│  PREPROCESSING: Feature engineering, schema handling            │
+├─────────────────────────────────────────────────────────────────┤
+│  ML ENSEMBLE: RF + IF + GBDT + LSTM                              │
+├─────────────────────────────────────────────────────────────────┤
+│  EVOLUTIONARY LAYER: GA + PSO policy optimization               │
+├─────────────────────────────────────────────────────────────────┤
+│  BEHAVIORAL ENGINE: EWMA profiling, deviation scoring            │
+├─────────────────────────────────────────────────────────────────┤
+│  DECISION ENGINE: Policy evaluation, action recommendations      │
+├─────────────────────────────────────────────────────────────────┤
+│  RESPONSE LAYER: Firewall actions, alerts, logging              │
+├─────────────────────────────────────────────────────────────────┤
+│  INTERFACES: Streamlit UI, FastAPI API, CLI, Chatbot            │
+└─────────────────────────────────────────────────────────────────┘
+
+COMPONENT DETAILS
+
+Data Ingestion
+- Primary Source: Dataset-Attacks-Firewall.csv (canonical schema)
+- API Input: JSON records via /api/v1/predict
+- Live Capture: Scapy-based packet monitoring (optional)
+- Custom Formats: Generic feature engineering fallback
+
+ML Pipeline
+- Preprocessing: Feature extraction, encoding, scaling
+- Model Training: End-to-end pipeline in train_model.py
+- Inference: Batch and real-time scoring in utils/prediction.py
+- Persistence: Joblib/Keras artifacts in models/
+
+Evolutionary Layer
+- GA Component: Binary genome for feature/rule selection
+- PSO Component: Continuous optimization for weights/thresholds
+- Fitness Function: Multi-objective (accuracy, FPR, FNR, latency, stability)
+- Policy Storage: Tuned parameters in saved_models/evo_policy.json
+
+Behavioral Analysis
+- Profile Store: JSON-based entity profiles with EWMA statistics
+- Deviation Scoring: Compares current behavior vs. historical baseline
+- Fusion Logic: Combines ML predictions with behavioral signals
+
+Response System
+- Firewall Integration: Windows Defender Firewall, Linux iptables/nftables
+- Alert Bus: JSONL-based cross-process communication
+- Audit Trails: Structured logging with timestamps and metadata
+
+INTERFACE LAYER
+
+Streamlit Dashboard (app.py)
+- Real-time monitoring and analytics
+- Threat visualization and timeline
+- Model management and retraining
+- Firewall controls and policy settings
+
+FastAPI Backend (api/main.py)
+- JWT authentication with role-based access
+- Prediction endpoints with batch processing
+- System status and health monitoring
+- Alert retrieval and management
+
+CLI Engine (cli_engine.py)
+- Step-by-step pipeline execution
+- SOC simulation workflow
+- Debugging and validation tools
+
+AI Chatbot (chatbot_engine.py)
+- Natural language threat analysis
+- ML-backed query responses
+- Retrieval-augmented generation (RAG)
+
+================================================================================
+5. MODULE-WISE EXPLANATION
+================================================================================
+
+5.1 RISK SCORING MODULE
+
+Location: utils/prediction.py (AuraPredictor class)
+
+Purpose:
+- Primary threat classification using ensemble ML models
+- Provides risk levels: Safe, Suspicious, Malicious, Critical
+- Generates confidence scores and probability distributions
+
+Key Components:
+- predict_tabular(): Core inference method for canonical data
+- predict_records(): High-level interface for arbitrary records
+- explain_decision(): Generates human-readable explanations
+
+Algorithm Details:
+- Random Forest: 100 estimators, trained on risk classes
+- Isolation Forest: Contamination auto, n_estimators=100
+- Gradient Boosting: 100 estimators for CVSS regression
+- LSTM: Bidirectional, trained on temporal windows (seq_len=12)
+
+5.2 CVSS ANALYSIS MODULE
+
+Location: utils/prediction.py (CVSS regression)
+
+Purpose:
+- Predicts Common Vulnerability Scoring System (CVSS) severity
+- Provides standardized severity assessment (0-10 scale)
+- Enables prioritization and risk ranking
+
+Implementation:
+- Gradient Boosting Regressor with feature preprocessing
+- Clipped outputs to valid CVSS range [0, 10]
+- Integrated with risk classification for comprehensive scoring
+
+5.3 ML MODELS INTEGRATION
+
+Random Forest Classifier:
+- Purpose: Discrete risk level classification
+- Features: Engineered behavioral and contextual features
+- Output: Class probabilities for Safe/Suspicious/Malicious/Critical
+- Training: Stratified split from canonical dataset
+
+Isolation Forest:
+- Purpose: Unsupervised anomaly detection
+- Features: Same feature space as classifier
+- Output: Anomaly score (-1 outlier, +1 inlier) + decision function
+- Training: Unsupervised on normal traffic patterns
+
+Gradient Boosting Regressor:
+- Purpose: Continuous severity prediction
+- Features: Extended feature set with categorical encoding
+- Output: CVSS-like score [0, 10]
+- Training: MSE optimization on labeled severity data
+
+LSTM Network:
+- Purpose: Temporal sequence analysis
+- Architecture: Bidirectional LSTM with dense output
+- Input: Sliding windows of ordered events (seq_len=12)
+- Output: Sequence-level risk predictions
+
+5.4 EVOLUTIONARY COMPUTING LAYER (GA + PSO)
+
+Location: evo_integration.py, ga_optimizer.py, pso_optimizer.py
+
+Purpose:
+- Optimizes decision policies without retraining base ML models
+- Adapts to changing threat landscapes and operational requirements
+- Balances multiple objectives: accuracy, false positives, false negatives
+
+Genetic Algorithm (GA)
+Configuration:
+- Population size: 42
+- Generations: 35
+- Tournament selection (k=4)
+- Uniform crossover (rate=0.9)
+- Adaptive mutation (rate=0.08)
+
+Genome Structure (8 bits):
+- Bit 0: Include RF probability features
+- Bit 1: Include Isolation Forest signals
+- Bit 2: Include anomaly scores
+- Bit 3: Include CVSS predictions
+- Bit 4: Include behavioral deviation
+- Bit 5: Enable threat blocking
+- Bit 6: Require anomaly for blocking
+- Bit 7: Require behavioral spike for blocking
+
+Particle Swarm Optimization (PSO)
+Configuration:
+- Particles: 28
+- Iterations: 45
+- Inertia: 0.72, Cognitive: 1.45, Social: 1.45
+- Velocity max: 0.25
+
+Parameter Space (9 dimensions):
+- Weights for RF, IF, anomaly, CVSS, behavioral signals
+- Score threshold for threat detection
+- Behavioral deviation threshold
+- Minimum risk index for escalation
+- Anomaly requirement toggle
+
+Fitness Function
+Multi-objective optimization:
+Fitness = w₁×Accuracy - w₂×FPR - w₃×FNR - w₄×Latency + w₅×Stability
+
+- Accuracy: Classification accuracy on held-out data
+- FPR: False positive rate (costly false alarms)
+- FNR: False negative rate (missed threats)
+- Latency: Prediction time (performance requirement)
+- Stability: Bootstrap variance (consistency measure)
+
+5.5 BEHAVIORAL ANALYSIS ENGINE
+
+Location: utils/behavioral_profiles.py
+
+Purpose:
+- Maintains per-entity behavioral baselines
+- Detects deviations from unusual patterns
+- Provides additional context for threat assessment
+
+Key Features:
+- EWMA Statistics: Exponentially weighted moving averages
+- Malicious Fraction Tracking: Historical threat ratios
+- Timestamp Sequencing: Event timing analysis
+- Incremental Learning: Online profile updates
+
+Deviation Scoring:
+- Compares current event against entity baseline
+- Boosts threat scores for unusual behavior
+- Handles first-time malicious activity detection
+
+5.6 FIREWALL DECISION SYSTEM
+
+Location: utils/firewall.py
+
+Purpose:
+- Translates threat assessments into actionable responses
+- Provides OS-level firewall integration
+- Implements safety controls and audit trails
+
+Supported Platforms:
+- Windows: netsh advfirewall commands
+- Linux: iptables and nftables support
+- Safety: Dry-run mode for testing and validation
+
+Decision Logic:
+- Risk-based blocking thresholds
+- Anomaly confirmation requirements
+- Behavioral spike validation
+- Administrative override capabilities
+
+5.7 REAL-TIME ANOMALY DETECTION SYSTEM
+
+Primary Detection:
+- Isolation Forest for geometric outlier detection
+- One-Class SVM fallback for small datasets
+- Generic feature engineering for non-canonical data
+
+Temporal Analysis:
+- LSTM sequence modeling for time-series patterns
+- Timestamp deviation scoring
+- Event frequency analysis
+
+Behavioral Anomalies:
+- Entity-specific deviation detection
+- Unexpected maliciousness flagging
+- Adaptive threshold adjustment
+
+================================================================================
+6. DATA FLOW DIAGRAM
+================================================================================
+
+The system starts with the raw input stage where data is collected from CSV records, API JSON data, and live network packets. This data is then sent to the preprocessing stage where schema detection is performed to understand the structure of the data, followed by cleaning to remove noise and inconsistencies, and validation to ensure the data is accurate and reliable.
+
+After preprocessing, the data moves to the feature engineering stage where important features are extracted, including numeric and categorical features, temporal patterns, and behavioral characteristics. These features are then passed into the machine learning ensemble stage where multiple models such as Random Forest, Isolation Forest, Gradient Boosting, and optionally LSTM are applied to analyze the data.
+
+The outputs from these models are combined in the model fusion stage using techniques such as ensemble averaging, weighted sum, and confidence calculation. This produces base scores which include risk classification, anomaly flags, CVSS score estimation, and probability values.
+
+Next, the data flows into the evolutionary layer where optimization techniques like Genetic Algorithms (GA), Particle Swarm Optimization (PSO), and fitness functions are used to improve decision making. The results are refined in the policy tuning stage where GA is used for selection, PSO adjusts weights, and fitness evaluation ensures optimal performance.
+
+This leads to optimized decisions including threat level identification, recommended actions, and confidence scores. After this, the system performs behavioral analysis where profiles are stored and analyzed using statistical methods such as EWMA.
+
+The deviation assessment stage then compares current behavior with historical patterns using EWMA comparison and applies boost factors to highlight anomalies. This produces the final score which includes fused risk, explanation, and an action plan.
+
+Finally, the system enters the response engine where decisions and policies are applied. These decisions are executed in the action execution stage through firewall actions, alert generation, and notifications. All activities are recorded in the audit trail stage which maintains JSONL logs, system metrics, and compliance records for monitoring and future analysis.
+
+================================================================================
+7. TECHNOLOGIES USED
+================================================================================
+
+CORE TECHNOLOGIES
+
+Category              Technology          Version         Purpose
+-------------------  ------------------  --------------  -------------------
+Programming Language Python              3.10+           Core implementation
+ML Framework          scikit-learn       1.3.0+          Traditional ML models
+Deep Learning         TensorFlow         2.15.0+         LSTM implementation
+Data Processing       pandas             2.0.0+          Data manipulation
+Numerical Computing   NumPy              1.24.0+         Array operations
+Visualization         Plotly             5.18.0+         Interactive charts
+Web Framework         Streamlit          1.32.0+         Dashboard UI
+API Framework         FastAPI            0.110.0+        REST API
+ASGI Server           Uvicorn            0.27.0+         API server
+Authentication        python-jose        3.3.0+          JWT tokens
+Password Hashing      passlib            1.7.4+          Secure passwords
+Serialization         joblib             1.3.0+          Model persistence
+PDF Generation        fpdf2              2.7.0+          Report export
+Environment           python-dotenv      1.0.0+          Configuration
+
+SUPPORTING TECHNOLOGIES
+
+Category              Technology          Purpose
+-------------------  ------------------  -------------------
+Packet Capture       Scapy               Live network monitoring
+Containerization     Docker              Deployment packaging
+Orchestration        Docker Compose      Multi-service deployment
+Version Control      Git                 Source code management
+Documentation        Markdown            Technical documentation
+
+EVOLUTIONARY COMPUTING
+
+Component            Implementation       Purpose
+------------------  ------------------  -------------------
+GA Library          Custom implementation Feature selection, rule optimization
+PSO Library         Custom implementation Parameter optimization
+Fitness Evaluation  Multi-objective      Performance assessment
+
+================================================================================
+8. INSTALLATION & SETUP GUIDE
+================================================================================
+
+PREREQUISITES
+
+- Python: 3.10 or higher
+- Operating System: Windows 10+, Linux (Ubuntu 20.04+), macOS 11+
+- RAM: Minimum 8GB, Recommended 16GB+
+- Disk Space: 5GB free space
+- Network: Internet connection for package installation
+
+STEP-BY-STEP INSTALLATION
+
+1. Clone the Repository
+   git clone https://github.com/mariumshahzad31/aura.git
+   cd aura
+
+2. Create Virtual Environment
+   # Windows
+   python -m venv .venv
+   .venv\Scripts\activate
+
+   # Linux/macOS
+   python -m venv .venv
+   source .venv/bin/activate
+
+3. Install Dependencies
+   pip install -r requirements.txt
+
+4. Verify Installation
+   python -c "import streamlit, pandas, numpy, sklearn; print('Installation successful')"
+
+5. Download Dataset
+   Ensure data/Dataset-Attacks-Firewall.csv is present in the data/ directory.
+
+6. Train Models (Required)
+   python train_model.py
+
+   This will create the necessary model files in the models/ directory:
+   - risk_model.pkl (Random Forest + Isolation Forest)
+   - cvss_model.pkl (Gradient Boosting)
+   - lstm_model.h5 (LSTM network)
+
+OPTIONAL SETUP
+
+Enable Evolutionary Layer
+# Run evolutionary optimization
+python evo_integration.py --validate
+
+# This creates saved_models/evo_policy.json
+
+Configure Environment Variables
+Create a .env file in the project root:
+# Authentication
+AURA_JWT_SECRET=your-super-secure-jwt-secret-here
+AURA_ADMIN_USER=admin
+AURA_ADMIN_PASSWORD=secure-admin-password
+
+# LLM Integration (optional)
+OPENAI_API_KEY=your-openai-api-key
+AURA_LLM_ENABLED=true
+
+# Firewall (production only)
+AURA_FIREWALL_DRY_RUN=false
+
+# Evolutionary Layer
+AURA_EVO_ENABLED=true
+
+# Packet Capture (requires admin/root)
+AURA_PACKET_CAPTURE=false
+
+Docker Deployment
+# Build and run with Docker Compose
+docker-compose up --build
+
+================================================================================
+9. HOW TO RUN THE PROJECT
+================================================================================
+
+INTERFACE OPTIONS
+
+AURA provides multiple interfaces for different use cases:
+
+1. Web Dashboard (Primary Interface)
+   streamlit run app.py
+   - Access at http://localhost:8501
+   - Full-featured dashboard with real-time monitoring
+   - Model management and analytics
+
+2. REST API (Backend Service)
+   uvicorn api.main:app --host 0.0.0.0 --port 8000
+   - API documentation at http://localhost:8000/docs
+   - JWT authentication required
+   - Batch prediction and system management
+
+3. Command-Line Interface (SOC Simulator)
+   python cli_engine.py
+   - Interactive step-by-step execution
+   - Educational tool for understanding the pipeline
+   - Debugging and validation
+
+4. AI Chatbot (Intelligent Assistant)
+   python chatbot_engine.py
+   - Natural language threat analysis
+   - ML-backed query responses
+   - SOC analyst assistant
+
+RUNNING MODES
+
+Development Mode
+- All interfaces can run simultaneously
+- Use different ports for each service
+- Full logging and debugging enabled
+
+Production Mode
+- Use Docker Compose for containerized deployment
+- Configure environment variables for security
+- Enable firewall integration carefully
+
+Testing Mode
+- Use dry-run firewall mode
+- Enable debug logging
+- Test with sample datasets
+
+STARTUP SEQUENCE
+
+1. Verify Models: Ensure models/ directory contains trained artifacts
+2. Check Dataset: Confirm data/Dataset-Attacks-Firewall.csv exists
+3. Start Services: Launch desired interfaces
+4. Validate: Test prediction endpoints and UI functionality
+
+================================================================================
+10. INPUT/OUTPUT FORMAT
+================================================================================
+
+INPUT FORMATS
+
+Primary Input: Canonical CSV Schema
+Data,mod_date,pub_date,cvss,Firewall Traffics,cwe_code,cwe_name,summary,access_authentication,access_complexity,access_vector,impact_availability,impact_confidentiality,impact_integrity
+CVE-2023-1234,2023-01-15,2023-01-10,7.5,192.168.1.1 -> 10.0.0.1,CWE-79,Cross-site Scripting,Vulnerable to XSS attack,Not required,Medium,Network,Partial,Partial,Partial
+
+API JSON Input
+{
+  "records": [
+    {
+      "Data": "CVE-2023-1234",
+      "cvss": 7.5,
+      "Firewall Traffics": "192.168.1.1 -> 10.0.0.1",
+      "cwe_code": "CWE-79",
+      "cwe_name": "Cross-site Scripting",
+      "summary": "Vulnerable to XSS attack",
+      "access_authentication": "Not required",
+      "access_complexity": "Medium",
+      "access_vector": "Network",
+      "impact_availability": "Partial",
+      "impact_confidentiality": "Partial",
+      "impact_integrity": "Partial"
+    }
+  ],
+  "include_explanation": true,
+  "use_llm": false
+}
+
+Generic Input (Fallback)
+{
+  "custom_field_1": "value1",
+  "custom_field_2": 123,
+  "timestamp": "2023-01-15T10:30:00Z",
+  "description": "Suspicious network activity"
+}
+
+OUTPUT FORMATS
+
+Prediction Response
+[
+  {
+    "cve_id": "CVE-2023-1234",
+    "risk_class": "Malicious",
+    "risk_code": 2,
+    "risk_probabilities": {
+      "Safe": 0.05,
+      "Suspicious": 0.10,
+      "Malicious": 0.75,
+      "Critical": 0.10
+    },
+    "anomaly_score_flag": -1,
+    "anomaly_score": 0.85,
+    "cvss_predicted": 7.8,
+    "confidence": 0.75,
+    "behavioral": {
+      "behavioral_deviation": 0.3,
+      "fused_risk_name": "Malicious",
+      "fused_risk_code": 2
+    },
+    "evolutionary": {
+      "evo_score": 0.82,
+      "evo_threat": true,
+      "evo_action": "RATE_LIMIT+LOG"
+    },
+    "explanation": {
+      "threat_summary": "Model-estimated severity: 7.8 on 0-10 scale. Primary risk label: Malicious (confidence 0.75).",
+      "anomaly_context": "Isolation Forest flagged this profile as anomalous.",
+      "weakness_context": "Mapped weakness family: Cross-site Scripting",
+      "evidence": "Evidence excerpt: Vulnerable to XSS attack...",
+      "recommended_actions": "Apply rate limits and enhanced logging; require step-up authentication."
+    }
+  }
+]
+
+Alert Format
+{
+  "ts": "2023-01-15T10:30:00Z",
+  "cve_id": "CVE-2023-1234",
+  "risk_class": "Malicious",
+  "source": "api_prediction"
+}
+
+Dashboard Metrics
+{
+  "row_count": 89660,
+  "unique_cve": 45230,
+  "cvss_mean": 6.2,
+  "risk_counts": {
+    "Safe": 25000,
+    "Suspicious": 30000,
+    "Malicious": 25000,
+    "Critical": 9630
+  },
+  "normal_ratio": 0.28,
+  "anomaly_ratio_proxy": 0.15
+}
+
+================================================================================
+11. ERROR HANDLING MECHANISMS
+================================================================================
+
+INPUT VALIDATION
+
+Schema Validation
+- Canonical Schema: Strict validation of required columns
+- Generic Fallback: Automatic feature type inference
+- Missing Data: Median imputation for numeric, "MISSING" for categorical
+
+Data Type Coercion
+- Numeric Fields: pd.to_numeric() with error handling
+- Date Fields: pd.to_datetime() with fallback to median
+- Text Fields: String conversion with length limits
+
+MODEL LOADING ERRORS
+
+Missing Models
+try:
+    predictor = AuraPredictor()
+except FileNotFoundError as e:
+    st.error(f"Models not found: {e}. Run python train_model.py first.")
+
+TensorFlow Issues
+try:
+    from tensorflow import keras
+    lstm_model = keras.models.load_model(path)
+except ImportError:
+    logger.warning("TensorFlow not available, LSTM disabled")
+    lstm_model = None
+
+RUNTIME ERROR HANDLING
+
+Prediction Failures
+- Fallback Scoring: Generic anomaly detection when ML models fail
+- Safe Defaults: Conservative risk assessment on errors
+- Error Logging: Structured logging of all failures
+
+Network Timeouts
+- API Calls: Configurable timeouts with retries
+- External Services: Circuit breaker pattern for NVD API
+- Cache Fallback: Disk-cached responses for offline operation
+
+SYSTEM RESILIENCE
+
+Graceful Degradation
+- Optional Components: LLM explainer, packet capture, live monitoring
+- Dry Run Mode: Firewall actions logged but not executed
+- Resource Limits: Memory and CPU usage monitoring
+
+Recovery Mechanisms
+- Model Retraining: Automated pipeline for model updates
+- Profile Reset: Behavioral profile clearing on corruption
+- Log Rotation: Automatic cleanup of old log files
+
+================================================================================
+12. OPTIMIZATION TECHNIQUES APPLIED
+================================================================================
+
+ML MODEL OPTIMIZATION
+
+Feature Engineering
+- Dimensionality Reduction: Principal component analysis for high-dimensional data
+- Feature Selection: Recursive elimination and importance-based selection
+- Encoding Optimization: Target encoding for high-cardinality categoricals
+
+Model Training
+- Hyperparameter Tuning: Grid search with cross-validation
+- Early Stopping: Prevent overfitting in iterative models
+- Ensemble Methods: Bootstrap aggregation for stability
+
+Inference Optimization
+- Batch Processing: Vectorized operations for multiple records
+- Caching: LRU cache for repeated predictions
+- Lazy Loading: Models loaded on first access
+
+EVOLUTIONARY OPTIMIZATION
+
+GA Optimization
+- Adaptive Mutation: Mutation rate adjusts based on population diversity
+- Elitism: Preserve best individuals across generations
+- Tournament Selection: Efficient selection without full sorting
+
+PSO Optimization
+- Velocity Clamping: Prevent particle explosion
+- Inertia Weight: Adaptive inertia for exploration/exploitation balance
+- Multi-objective: Pareto front tracking for conflicting objectives
+
+Fitness Function Tuning
+- Weighted Objectives: Configurable weights for different priorities
+- Bootstrap Stability: Statistical confidence in performance metrics
+- Latency Measurement: Real-time performance assessment
+
+SYSTEM PERFORMANCE
+
+Memory Optimization
+- Data Streaming: Process large datasets in chunks
+- Object Reuse: Pool expensive objects (preprocessors, scalers)
+- Garbage Collection: Explicit cleanup of temporary objects
+
+Computational Efficiency
+- Parallel Processing: Joblib parallel execution where applicable
+- Vectorization: NumPy operations for numerical computations
+- Algorithm Selection: Optimal algorithms for dataset characteristics
+
+I/O Optimization
+- Async Operations: Non-blocking I/O for API calls
+- Compression: Log compression for storage efficiency
+- Buffering: Buffered writes for high-frequency logging
+
+================================================================================
+13. ADVANTAGES
+================================================================================
+
+TECHNICAL ADVANTAGES
+
+1. Multi-Layered Detection
+   - Combines supervised and unsupervised learning
+   - Temporal analysis with LSTM sequences
+   - Behavioral profiling for context awareness
+
+2. Adaptive Optimization
+   - Evolutionary algorithms for policy tuning
+   - No model retraining required for adaptation
+   - Multi-objective optimization for balanced performance
+
+3. Explainable AI
+   - Human-readable threat explanations
+   - Confidence scores and probability distributions
+   - Actionable recommendations for analysts
+
+4. Production-Ready Architecture
+   - Containerized deployment with Docker
+   - REST API with authentication
+   - Comprehensive logging and monitoring
+
+OPERATIONAL ADVANTAGES
+
+1. Comprehensive Coverage
+   - Handles multiple data formats and schemas
+   - Generic anomaly detection for unknown data
+   - Threat intelligence enrichment
+
+2. Automated Response
+   - OS firewall integration
+   - Configurable response policies
+   - Safety controls and dry-run modes
+
+3. Multi-Interface Accessibility
+   - Web dashboard for visualization
+   - API for system integration
+   - CLI for operational workflows
+   - Chatbot for natural interaction
+
+4. Scalability and Performance
+   - Batch processing capabilities
+   - Efficient algorithms for real-time operation
+   - Resource-aware optimization
+
+SECURITY ADVANTAGES
+
+1. Defense in Depth
+   - Multiple detection mechanisms
+   - Failsafe fallbacks
+   - Conservative defaults
+
+2. Audit and Compliance
+   - Structured logging
+   - Alert trails
+   - Policy enforcement tracking
+
+3. Risk Management
+   - Configurable sensitivity
+   - Threshold optimization
+   - False positive minimization
+
+================================================================================
+14. LIMITATIONS
+================================================================================
+
+TECHNICAL LIMITATIONS
+
+1. Model Dependencies
+   - Requires trained models for optimal performance
+   - TensorFlow optional but recommended for LSTM
+   - Cold start time for model loading
+
+2. Data Requirements
+   - Canonical dataset required for training
+   - Generic mode less accurate than trained models
+   - Feature engineering assumptions
+
+3. Computational Resources
+   - Memory-intensive for large datasets
+   - Training time for model updates
+   - Real-time constraints for high-volume processing
+
+OPERATIONAL LIMITATIONS
+
+1. Platform Dependencies
+   - OS-specific firewall integration
+   - Packet capture requires elevated privileges
+   - Python ecosystem dependencies
+
+2. Network Dependencies
+   - External API calls for threat intelligence
+   - Internet required for some features
+   - Latency impacts for remote APIs
+
+3. Maintenance Requirements
+   - Regular model retraining needed
+   - Log rotation and storage management
+   - Security updates for dependencies
+
+ALGORITHMIC LIMITATIONS
+
+1. False Positives/Negatives
+   - No perfect detection system
+   - Trade-offs between sensitivity and specificity
+   - Domain adaptation challenges
+
+2. Explainability Bounds
+   - ML model decisions not always fully interpretable
+   - LLM explanations depend on API availability
+   - Complex ensemble decisions hard to trace
+
+3. Evolutionary Optimization
+   - Computationally expensive tuning process
+   - Local optima risks in high-dimensional spaces
+   - Requires representative evaluation data
+
+================================================================================
+15. FUTURE ENHANCEMENTS
+================================================================================
+
+SHORT-TERM (3-6 months)
+
+1. Enhanced ML Models
+   - Transformer-based architectures for sequence modeling
+   - Autoencoder variants for anomaly detection
+   - Multi-modal learning for diverse data types
+
+2. Real-Time Improvements
+   - Streaming inference pipelines
+   - Online learning capabilities
+   - Incremental model updates
+
+3. Integration Enhancements
+   - SIEM system connectors
+   - SOAR platform integration
+   - Cloud security service APIs
+
+MEDIUM-TERM (6-12 months)
+
+1. Advanced Analytics
+   - Predictive threat modeling
+   - Behavioral pattern mining
+   - Automated incident response workflows
+
+2. Scalability Improvements
+   - Distributed processing support
+   - High-availability deployment
+   - Multi-tenant architecture
+
+3. Intelligence Enhancements
+   - Advanced threat intelligence correlation
+   - Machine learning on external threat feeds
+   - Predictive risk assessment
+
+LONG-TERM (1-2 years)
+
+1. Autonomous Security
+   - Self-learning adaptation
+   - Zero-touch configuration
+   - Predictive prevention
+
+2. Extended Ecosystems
+   - IoT security integration
+   - OT/ICS security support
+   - Cross-domain threat correlation
+
+3. Research Integration
+   - Latest ML research incorporation
+   - Novel algorithm implementations
+   - Academic collaboration features
+
+MOBILE APPLICATION DEVELOPMENT
+
+1. Native Mobile Apps
+   - iOS and Android applications for field analysts
+   - Offline threat assessment capabilities
+   - Push notifications for critical alerts
+
+2. Mobile API Integration
+   - Lightweight REST endpoints optimized for mobile
+   - Battery-efficient polling mechanisms
+   - Secure authentication with biometric support
+
+3. Field Operations Support
+   - GPS-based threat correlation
+   - Camera-based evidence collection
+   - Voice-to-text threat reporting
+
+4. Mobile Dashboard Features
+   - Touch-optimized interface design
+   - Gesture-based navigation
+   - Emergency quick-action buttons
+
+================================================================================
+16. CONCLUSION
+================================================================================
+
+AURA represents a comprehensive approach to AI-driven cybersecurity, combining traditional machine learning, deep learning, and evolutionary optimization to create an adaptive, explainable security system. The system's multi-layered architecture provides defense in depth while maintaining operational efficiency and human oversight.
+
+KEY ACHIEVEMENTS
+
+1. Integrated ML Pipeline: Successfully combines multiple ML paradigms
+2. Evolutionary Optimization: Novel application of GA + PSO for security policy tuning
+3. Production Architecture: Complete system with multiple interfaces and deployment options
+4. Explainable Security: Human-understandable threat analysis and recommendations
+
+IMPACT AND VALUE
+
+AURA demonstrates how modern AI techniques can enhance cybersecurity operations by:
+- Reducing analyst workload through automated analysis
+- Improving detection accuracy through ensemble methods
+- Providing adaptive responses to evolving threats
+- Maintaining human oversight through explainable AI
+
+FUTURE POTENTIAL
+
+The modular architecture and evolutionary optimization layer provide a foundation for continuous improvement and adaptation to new threat landscapes. The system's ability to handle diverse data formats and provide actionable intelligence makes it suitable for integration into enterprise security operations.
+
+FINAL THOUGHTS
+
+AURA serves as both a practical security tool and a research platform for exploring AI applications in cybersecurity. Its open architecture and comprehensive documentation make it accessible to security practitioners, researchers, and developers looking to advance the field of AI-driven security operations.
+
+================================================================================
+
+Document Version: 2.0
+Last Updated: April 30, 2026
+Contact: aura-security@project.org
+Repository: https://github.com/mariumshahzad31/aura
