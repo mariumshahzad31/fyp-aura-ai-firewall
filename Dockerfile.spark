@@ -1,0 +1,6 @@
+FROM apache/spark:3.5.1-java17
+USER root
+WORKDIR /opt/aura
+COPY platform/streaming/spark_job.py /opt/aura/spark_job.py
+ENV PYSPARK_PYTHON=python3
+CMD ["/opt/spark/bin/spark-submit", "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1", "/opt/aura/spark_job.py"]
