@@ -157,3 +157,25 @@ def ga_optimize(
         diagnostics=best_diag,
     )
 
+
+def _demo_ga_objective(genome: np.ndarray) -> tuple[float, dict[str, float]]:
+    threshold = float(np.clip(0.3 + 0.4 * np.mean(genome), 0.05, 0.95))
+    scores = np.random.default_rng(42).random(100)
+    y_pred = (scores > threshold).astype(int)
+    y_true = np.random.default_rng(42).integers(0, 2, size=100)
+    acc = float(np.mean(y_true == y_pred))
+    fitness = float(acc - 0.2 * np.mean(y_pred))
+    return fitness, {"accuracy": acc, "threshold": threshold}
+
+
+if __name__ == "__main__":
+    result = ga_optimize(
+        n_bits=10,
+        objective=_demo_ga_objective,
+        config=GAConfig(pop_size=20, n_gens=12, patience=5),
+        logger=print,
+    )
+    print("\nGA demo complete")
+    print("Best genome:", result.best_genome.tolist())
+    print("Best fitness:", result.best_fitness)
+

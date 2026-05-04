@@ -145,3 +145,26 @@ def pso_optimize(
         diagnostics=gbest_diag,
     )
 
+
+def _demo_pso_objective(position: np.ndarray) -> tuple[float, dict[str, float]]:
+    threshold = float(np.clip(0.3 + 0.4 * np.mean(position), 0.05, 0.95))
+    scores = np.random.default_rng(42).random(100)
+    y_pred = (scores > threshold).astype(int)
+    y_true = np.random.default_rng(42).integers(0, 2, size=100)
+    acc = float(np.mean(y_true == y_pred))
+    fitness = float(acc - 0.1 * np.mean(y_pred))
+    return fitness, {"accuracy": acc, "threshold": threshold}
+
+
+if __name__ == "__main__":
+    result = pso_optimize(
+        dim=5,
+        bounds=[(0.0, 1.0)] * 5,
+        objective=_demo_pso_objective,
+        config=PSOConfig(n_particles=20, n_iters=20, patience=5),
+        logger=print,
+    )
+    print("\nPSO demo complete")
+    print("Best position:", [float(x) for x in result.best_position.tolist()])
+    print("Best fitness:", result.best_fitness)
+

@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-from platform.config import platform_settings
+from aura_platform.config import platform_settings
 
 
 @lru_cache(maxsize=1)

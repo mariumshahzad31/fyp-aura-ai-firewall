@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from platform.api_addon import router as platform_router
-from platform.config import platform_settings
-from platform.middleware import TenantMiddleware, ZeroTrustMiddleware
+from aura_platform.api_addon import router as platform_router
+from aura_platform.config import platform_settings
+from aura_platform.middleware import TenantMiddleware, ZeroTrustMiddleware
 
 
 def install_platform_extensions(app: FastAPI) -> None:

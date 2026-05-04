@@ -575,6 +575,38 @@ def run_validation_and_tune(
     return report
 
 
+def run_demo_validation(
+    n_samples: int = 60, logger: Optional[Callable[[str], None]] = None
+) -> Dict[str, Any]:
+    rng = np.random.default_rng(42)
+    scored: List[Dict[str, Any]] = []
+    y_true: List[str] = []
+    for _ in range(max(10, int(n_samples))):
+        threat = rng.random() < 0.45
+        label = "Malicious" if threat else "Safe"
+        y_true.append(label)
+        scored.append(
+            {
+                "risk_probabilities": {
+                    "Malicious": float(rng.random() if threat else rng.random() * 0.4),
+                    "Critical": float(rng.random() if threat else rng.random() * 0.25),
+                    "Suspicious": float(rng.random()),
+                },
+                "anomaly_score_flag": -1 if threat and rng.random() < 0.8 else 1,
+                "anomaly_score": float(rng.random()),
+                "cvss_predicted": float(rng.random() * 10.0),
+                "behavioral": {"behavioral_deviation": float(rng.random() if threat else rng.random() * 0.4)},
+                "risk_code": 2 if threat else 0,
+                "risk_class": label,
+            }
+        )
+    if logger:
+        logger(f"[EVO] running synthetic demo with n={len(scored)}")
+    report = tune_evolutionary_layer(scored, y_true, logger=logger)
+    report["saved_policy_path"] = None
+    return report
+
+
 def _stdout_logger() -> Callable[[str], None]:
     def _log(msg: str) -> None:
         print(msg, flush=True)
@@ -592,23 +624,27 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="AURA evolutionary optimization layer (GA + PSO).")
     parser.add_argument("--validate", action="store_true", help="Run before/after validation and save policy")
-    parser.add_argument("--max-rows", type=int, default=900, help="Max rows to use for tuning")
+    parser.add_argument("--demo", action="store_true", help="Run a synthetic GA+PSO demo without real dataset")
+    parser.add_argument("--max-rows", type=int, default=900, help="Max rows to use for tuning or demo sample size")
     parser.add_argument("--out", type=str, default="", help="Optional output policy path")
     args = parser.parse_args()
 
-    if not args.validate:
-        print("Nothing to do. Use --validate.", flush=True)
+    if not args.validate and not args.demo:
+        print("Nothing to do. Use --validate or --demo.", flush=True)
         return
 
-    from utils.prediction import AuraPredictor
-    from utils.preprocessing import load_raw_dataset
+    if args.demo:
+        rep = run_demo_validation(n_samples=int(args.max_rows), logger=_stdout_logger())
+    else:
+        from utils.prediction import AuraPredictor
+        from utils.preprocessing import load_raw_dataset
 
-    predictor = AuraPredictor()
-    df = load_raw_dataset()
-    out_path = Path(args.out).resolve() if args.out else None
-    rep = run_validation_and_tune(
-        predictor, df, max_rows=int(args.max_rows), output_path=out_path, logger=_stdout_logger()
-    )
+        predictor = AuraPredictor()
+        df = load_raw_dataset()
+        out_path = Path(args.out).resolve() if args.out else None
+        rep = run_validation_and_tune(
+            predictor, df, max_rows=int(args.max_rows), output_path=out_path, logger=_stdout_logger()
+        )
     print("\n=== EVOLUTIONARY VALIDATION REPORT ===")
     print(json.dumps({k: rep[k] for k in ("baseline", "ga", "pso", "tuned", "saved_policy_path")}, indent=2))
 

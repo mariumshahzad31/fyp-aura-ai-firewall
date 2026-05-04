@@ -6,8 +6,8 @@ from typing import Callable
 from starlette.requests import Request
 from starlette.responses import Response
 
-from platform.config import platform_settings
-from platform.context import tenant_id_cv
+from aura_platform.config import platform_settings
+from aura_platform.context import tenant_id_cv
 
 
 _TENANT_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:-]{1,126}$")

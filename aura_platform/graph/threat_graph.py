@@ -6,7 +6,7 @@ import math
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from platform.config import platform_settings
+from aura_platform.config import platform_settings
 
 
 def _norm_ip(ip: Optional[str]) -> str:

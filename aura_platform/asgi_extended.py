@@ -2,7 +2,7 @@
 
 Core `uvicorn api.main:app` remains unchanged."""
 
-from platform.bootstrap import build_extended_app
+from aura_platform.bootstrap import build_extended_app
 
 
 app = build_extended_app()

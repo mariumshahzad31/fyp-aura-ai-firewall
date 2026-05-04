@@ -9,8 +9,8 @@ from typing import Callable, Deque
 from starlette.requests import Request
 from starlette.responses import Response
 
-from platform.config import platform_settings
-from platform.context import tenant_id_cv, zt_verified_cv
+from aura_platform.config import platform_settings
+from aura_platform.context import tenant_id_cv, zt_verified_cv
 
 
 _NONCES: Deque[tuple[float, str]] = deque(maxlen=5000)

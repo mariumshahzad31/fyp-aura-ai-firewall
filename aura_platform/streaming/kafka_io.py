@@ -7,7 +7,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, Optional
 
-from platform.config import platform_settings
+from aura_platform.config import platform_settings
 
 
 class AuraKafkaProducer:

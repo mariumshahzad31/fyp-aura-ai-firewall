@@ -11,11 +11,11 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from api.auth import get_current_user
-from platform.config import platform_settings
-from platform.context import tenant_id_cv
-from platform.ml.transformer_infer import TransformerThreatHead, augment_prediction_row
-from platform.state import GLOBAL_THREAT_GRAPH
-from platform.streaming.kafka_io import AuraKafkaProducer, kafka_emit_threat
+from aura_platform.config import platform_settings
+from aura_platform.context import tenant_id_cv
+from aura_platform.ml.transformer_infer import TransformerThreatHead, augment_prediction_row
+from aura_platform.state import GLOBAL_THREAT_GRAPH
+from aura_platform.streaming.kafka_io import AuraKafkaProducer, kafka_emit_threat
 
 router = APIRouter(prefix="/platform/v1", tags=["platform"])
 

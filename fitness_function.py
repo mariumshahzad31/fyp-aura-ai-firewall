@@ -129,3 +129,11 @@ def multi_objective_fitness(
         + w.w_stability * metrics.stability
     )
 
+
+if __name__ == "__main__":
+    y_true = np.array([1, 0, 1, 1, 0, 0, 1], dtype=int)
+    y_pred = np.array([1, 0, 1, 0, 0, 1, 1], dtype=int)
+    metrics = compute_metrics(y_true, y_pred, latency_ms=120.0, stability=0.85)
+    print("Metric bundle:", metrics.to_dict())
+    print("Fitness:", multi_objective_fitness(metrics))
+
