@@ -800,31 +800,6 @@ def render_logs(
         )
 
 
-def render_mobile(
-    df_raw: pd.DataFrame,
-    filtered: List[Dict[str, Any]],
-) -> None:
-    st.caption("Minimal SOC glance — same data substrate, condensed layout.")
-    summary = compute_dataset_summary(df_raw)
-    st.metric("Records", f"{summary.row_count:,}")
-    st.metric("Normal ratio (CVSS baseline)", f"{100 * summary.normal_ratio:.1f}%")
-    if filtered:
-        last_rows = []
-        for row in filtered[-5:]:
-            last_rows.append(
-                {
-                    "time": row.get("timestamp"),
-                    "cve": row.get("cve_id"),
-                    "risk": row.get("risk_class"),
-                }
-            )
-        st.subheader("Recent alerts")
-        st.dataframe(pd.DataFrame(last_rows), use_container_width=True, hide_index=True)
-    else:
-        st.subheader("Recent alerts (dataset tail)")
-        st.dataframe(pd.DataFrame(build_dataset_log_rows(df_raw, n=5)), use_container_width=True, hide_index=True)
-
-
 def render_ai_analyst_chat() -> None:
     """Intelligent AI Analyst Chat Interface"""
     st.markdown("### AURA AI Analyst")

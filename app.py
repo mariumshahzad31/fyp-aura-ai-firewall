@@ -40,7 +40,6 @@ from ui.pages import (
     render_firewall_controls,
     render_live_monitoring,
     render_logs,
-    render_mobile,
     render_threat_intel,
     render_anomaly_check,
     run_retrain,
@@ -151,19 +150,9 @@ def main() -> None:
         "Analytics": "Analytics",
         "Firewall Controls": "Firewall Controls",
         "Logs": "Logs",
-        "Mobile View": "Mobile View",
     }
     header_bar(title_map.get(page, "AURA"))
 
-
-    if page == "Mobile View":
-        render_mobile(df_raw, hist)
-        st.divider()
-        st.caption(
-            "Mobile client: authenticate against `/api/v1/auth/token` then call `/api/v1/predict` and `/api/v1/alerts`. "
-            "See `mobile/README.md`."
-        )
-        return
 
     if page == "Dashboard":
         render_dashboard(

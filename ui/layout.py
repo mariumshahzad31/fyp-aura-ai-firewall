@@ -84,7 +84,6 @@ def sidebar_navigation() -> str:
         "Analytics",
         "Firewall Controls",
         "Logs",
-        "Mobile View",
     ]
     cur = st.session_state.get("aura_nav", "Dashboard")
     idx = pages.index(cur) if cur in pages else 0
