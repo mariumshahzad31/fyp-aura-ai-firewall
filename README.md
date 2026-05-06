@@ -143,9 +143,3 @@ python chatbot_engine.py
 # REST API
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
-
----
-
-**License**: MIT  
-**Version**: 2.0  
-**Documentation**: See [AURA_Complete_Software_Documentation.md](AURA_Complete_Software_Documentation.md) for detailed technical documentation.
