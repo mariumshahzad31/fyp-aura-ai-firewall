@@ -13,6 +13,7 @@ from utils.behavioral_profiles import combine_scores, get_behavior_store
 from utils.firewall import get_firewall_manager
 from utils.helpers import LOGS_DIR, setup_logging
 from utils.prediction import AuraPredictor
+from utils.sqlite_store import get_event_store
 from config.settings import get_settings
 
 try:
@@ -33,6 +34,7 @@ def score_and_respond(
     out = predictor.predict_records(records, include_explanation=True, use_llm=use_llm)
     now = datetime.now(timezone.utc).isoformat()
     settings = get_settings()
+    event_store = get_event_store()
     evo_policy = load_policy() if (settings.evo_enabled and load_policy is not None) else None
     if evo_policy is not None:
         logger.info("[EVO] evolutionary policy loaded and applied")
@@ -42,9 +44,9 @@ def score_and_respond(
         key = subject_key or str(
             (row.get("live_meta") or {}).get("observed_source_ip") or row.get("cve_id") or "unknown"
         )
-        store = get_behavior_store()
-        dev = store.deviation_score(key, str(row.get("risk_class", "Safe")))
-        store.record_event(key, str(row.get("risk_class", "Safe")), now)
+        behavior_store = get_behavior_store()
+        dev = behavior_store.deviation_score(key, str(row.get("risk_class", "Safe")))
+        behavior_store.record_event(key, str(row.get("risk_class", "Safe")), now)
         row["behavioral"] = combine_scores(int(row.get("risk_code", 0)), dev)
         if evo_policy is not None:
             try:
@@ -52,6 +54,12 @@ def score_and_respond(
             except Exception:
                 row["evolutionary"] = {"error": "evo_policy_failed"}
         append_alert({"ts": now, "cve_id": row.get("cve_id"), "risk_class": row.get("risk_class"), "source": "orchestration"})
+        if event_store is not None:
+            try:
+                row["timestamp"] = row.get("timestamp") or now
+                event_store.insert_scored_event(row, source="orchestration", subject_key=key, ts=now)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("sqlite insert failed: %s", str(exc)[:240])
         if auto_firewall and row.get("live_meta"):
             ip = row["live_meta"].get("observed_source_ip")
             if ip:

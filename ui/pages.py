@@ -42,6 +42,8 @@ from utils.model_ui import (
 from utils.packet_monitor import SCAPY_AVAILABLE, get_or_create_monitor
 from utils.prediction import AuraPredictor, load_ordered_feature_frame
 from utils.preprocessing import RISK_NAMES, build_feature_frame, load_raw_dataset
+from utils.realtime_scoring import get_or_create_realtime_service
+from utils.sqlite_store import get_event_store
 from utils.threat_intel import correlate_dataset_cve
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -475,28 +477,86 @@ def render_dashboard(
 def render_live_monitoring(
     df_raw: pd.DataFrame,
     filtered: List[Dict[str, Any]],
+    predictor: Optional[AuraPredictor],
     model_ready: bool,
 ) -> None:
-    st.caption("Dataset timestamps + scored history · capture optional (Scapy).")
+    st.caption("Near real-time monitoring: optional packet capture + streaming scorer + durable event history.")
     mon = get_or_create_monitor(df_raw)
-    st.subheader("Live packet capture (Scapy)")
+    st.subheader("Live packet capture (Scapy) + streaming scoring")
     if not SCAPY_AVAILABLE:
         st.warning("Install Scapy and (on Windows) Npcap for raw capture: pip install scapy")
     else:
         bpf = st.text_input("BPF filter", value="ip", key="aura_bpf")
-        cc1, cc2 = st.columns(2)
+        cc1, cc2, cc3 = st.columns(3)
         with cc1:
-            if st.button("Start capture worker", key="aura_cap_start"):
+            if st.button("Start capture", key="aura_cap_start"):
                 ok = mon.start(bpf_filter=bpf or "ip")
                 st.success("Capture started") if ok else st.error(mon.state().last_error or "failed")
         with cc2:
-            if st.button("Stop capture worker", key="aura_cap_stop"):
+            if st.button("Stop capture", key="aura_cap_stop"):
                 mon.stop()
                 st.info("Stopped")
+        with cc3:
+            if model_ready and predictor is not None:
+                try:
+                    svc = get_or_create_realtime_service(predictor, df_raw)
+                    running = svc.state().running
+                    if st.button(
+                        "Start streaming scoring" if not running else "Stop streaming scoring",
+                        key="aura_rt_toggle",
+                    ):
+                        if running:
+                            svc.stop()
+                            st.info("Streaming scorer stopped")
+                        else:
+                            ok = svc.start(bpf_filter=bpf or "ip")
+                            st.success("Streaming scorer started") if ok else st.error(svc.state().last_error or "failed")
+                        st.rerun()
+                    st.caption(
+                        f"Scorer: {'RUNNING' if running else 'STOPPED'} · queued {svc.state().queued} · scored {svc.state().scored}"
+                    )
+                except Exception:
+                    st.caption("Streaming scorer unavailable (models not loaded).")
+            else:
+                st.caption("Train/load models to enable streaming scoring.")
         snap = mon.recent_snapshots(25)
         if snap:
             st.dataframe(pd.DataFrame([s.__dict__ for s in snap]), use_container_width=True, hide_index=True)
         st.caption(f"Packets seen: {mon.state().packets_captured} · last error: {mon.state().last_error or '—'}")
+
+        st.toggle("Auto-refresh (2s)", value=True, key="aura_live_autorefresh")
+        if st.session_state.get("aura_live_autorefresh"):
+            st.autorefresh(interval=2000, key="aura_live_tick")
+
+        store = get_event_store()
+        if store is not None:
+            st.subheader("Durable event tail (SQLite)")
+            tail = store.tail_events(120)
+            if tail:
+                df_tail = pd.DataFrame(tail)
+                if "explanation_json" in df_tail.columns:
+                    df_tail["explanation_summary"] = df_tail["explanation_json"].apply(
+                        lambda x: (x or {}).get("threat_summary") if isinstance(x, dict) else ""
+                    )
+                if "live_meta_json" in df_tail.columns:
+                    df_tail["observed_source_ip"] = df_tail["live_meta_json"].apply(
+                        lambda x: (x or {}).get("observed_source_ip") if isinstance(x, dict) else ""
+                    )
+                keep = [
+                    "ts",
+                    "source",
+                    "observed_source_ip",
+                    "risk_class",
+                    "cvss_predicted",
+                    "anomaly_flag",
+                    "lstm_risk_class",
+                    "lstm_confidence",
+                    "explanation_summary",
+                ]
+                cols = [c for c in keep if c in df_tail.columns]
+                st.dataframe(df_tail[cols].tail(80), use_container_width=True, hide_index=True, height=320)
+            else:
+                st.caption("No events stored yet. Start streaming scoring or run a simulation batch.")
     h = hourly_traffic_profile(df_raw, max_points=120)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=h["timestamp"], y=h["events"], mode="lines", name="Events / hour (dataset)", line=dict(color="#38bdf8")))

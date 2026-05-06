@@ -53,3 +53,8 @@ class AuraSettings:
         self.cors_origins: list[str] = [
             x.strip() for x in os.environ.get("AURA_CORS_ORIGINS", "*").split(",") if x.strip()
         ]
+        # Durable event storage (additive; JSONL alert bus remains primary ring buffer).
+        self.sqlite_enabled: bool = _b("AURA_SQLITE_ENABLED", "true")
+        self.sqlite_path: str = os.environ.get("AURA_SQLITE_PATH", str(ROOT / "logs" / "aura_events.db"))
+        # Near real-time scoring worker for packet capture (optional).
+        self.realtime_scoring_enabled: bool = _b("AURA_REALTIME_SCORING", "true")

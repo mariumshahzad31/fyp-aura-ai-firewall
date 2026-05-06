@@ -169,7 +169,7 @@ def main() -> None:
     elif page == "Anomaly Check":
         render_anomaly_check(df_raw, predictor, model_ready)
     elif page == "Live Monitoring":
-        render_live_monitoring(df_raw, hist, model_ready)
+        render_live_monitoring(df_raw, hist, predictor, model_ready)
     elif page == "AI Insights":
         render_ai_insights(df_raw, hist)
     elif page == "AI Analyst Chat":

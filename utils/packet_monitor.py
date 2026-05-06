@@ -66,6 +66,10 @@ class PacketMonitorService:
         self._buffer: Deque[Dict[str, Any]] = deque(maxlen=500)
         self._snap_buffer: Deque[PacketSnapshot] = deque(maxlen=200)
 
+    def set_on_record(self, on_record: Optional[Callable[[Dict[str, Any], PacketSnapshot], None]] = None) -> None:
+        """Attach/replace callback invoked for each captured packet."""
+        self._on_record = on_record
+
     def _handle_packet(self, pkt: Any) -> None:
         if IP is None or not pkt.haslayer(IP):
             return
